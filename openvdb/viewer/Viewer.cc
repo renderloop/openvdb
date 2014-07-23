@@ -46,6 +46,9 @@
 #include <OpenGL/gl.h>
 #include <OpenGL/glu.h>
 #else
+#ifdef _WIN32
+#include <GL/glew.h>
+#endif
 #include <GL/gl.h>
 #include <GL/glu.h>
 #endif
@@ -416,6 +419,14 @@ ViewerImpl::viewGrids(const openvdb::GridCPtrVec& gridList, int width, int heigh
 
     glfwSetWindowTitle(mProgName.c_str());
     glfwSwapBuffers();
+
+#ifdef _WIN32
+    GLenum err = glewInit();
+    if (GLEW_OK != err) {
+        std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
+        return;
+    }
+#endif
 
     BitmapFont13::initialize();
 
