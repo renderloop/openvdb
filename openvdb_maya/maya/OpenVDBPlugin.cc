@@ -30,137 +30,30 @@
 
 /// @author FX R&D OpenVDB team
 
-#include <openvdb_maya/OpenVDBData.h>
 #include "OpenVDBPlugin.h"
+
+#include <openvdb_maya/OpenVDBData.h>
+#include <openvdb_maya/OpenVDBCopyNode.h>
+#include <openvdb_maya/OpenVDBFilterNode.h>
+#include <openvdb_maya/OpenVDBFromMayaFluidNode.h>
+#include <openvdb_maya/OpenVDBFromPolygonsNode.h>
+#include <openvdb_maya/OpenVDBReadNode.h>
+#include <openvdb_maya/OpenVDBTransformNode.h>
+#include <openvdb_maya/OpenVDBVisualizeNode.h>
+#include <openvdb_maya/OpenVDBWriteNode.h>
 
 #include <openvdb/Platform.h>
 #include <openvdb/openvdb.h>
 #include <openvdb/Types.h> // compiler pragmas
 
-#include <maya/MIOStream.h>
 #include <maya/MFnPlugin.h>
-#include <maya/MString.h>
-#include <maya/MArgList.h>
-#include <maya/MGlobal.h>
-#include <maya/MItSelectionList.h>
-#include <maya/MFnDependencyNode.h>
-#include <maya/MFnTypedAttribute.h>
-#include <maya/MPxData.h>
-#include <maya/MTypeId.h>
-#include <maya/MPlug.h>
 #include <maya/MFnPluginData.h>
 
-#include <tbb/mutex.h>
-
-#include <vector>
 #include <sstream>
-#include <string>
+
+namespace mvdb = openvdb_maya;
 
 ////////////////////////////////////////
-
-
-namespace openvdb_maya {
-
-
-namespace {
-
-struct NodeInfo {
-    MString typeName;
-    MTypeId typeId;
-    MCreatorFunction creatorFunction;
-    MInitializeFunction initFunction;
-    MPxNode::Type type;
-    const MString* classification;
-};
-
-typedef std::vector<NodeInfo> NodeList;
-
-typedef tbb::mutex Mutex;
-typedef Mutex::scoped_lock Lock;
-
-// Declare this at file scope to ensure thread-safe initialization.
-Mutex sRegistryMutex;
-
-NodeList * gNodes = NULL;
-
-} // unnamed namespace
-
-
-NodeRegistry::NodeRegistry(const MString& typeName, const MTypeId& typeId,
-    MCreatorFunction creatorFunction, MInitializeFunction initFunction,
-    MPxNode::Type type, const MString* classification)
-{
-    NodeInfo node;
-    node.typeName           = typeName;
-    node.typeId             = typeId;
-    node.creatorFunction    = creatorFunction;
-    node.initFunction       = initFunction;
-    node.type               = type;
-    node.classification     = classification;
-
-    Lock lock(sRegistryMutex);
-
-    if (!gNodes) {
-        OPENVDB_START_THREADSAFE_STATIC_WRITE
-        gNodes = new NodeList();
-        OPENVDB_FINISH_THREADSAFE_STATIC_WRITE
-    }
-
-    gNodes->push_back(node);
-}
-
-
-void
-NodeRegistry::registerNodes(MFnPlugin& plugin, MStatus& status)
-{
-    Lock lock(sRegistryMutex);
-
-    if (gNodes) {
-        for (size_t n = 0, N = gNodes->size(); n < N; ++n) {
-
-            const NodeInfo& node = (*gNodes)[n];
-
-            status = plugin.registerNode(node.typeName, node.typeId,
-                node.creatorFunction, node.initFunction, node.type, node.classification);
-
-            if (!status) {
-                const std::string msg = "Failed to register '" +
-                    std::string(node.typeName.asChar()) + "'";
-                status.perror(msg.c_str());
-                break;
-            }
-        }
-    }
-}
-
-
-void
-NodeRegistry::deregisterNodes(MFnPlugin& plugin, MStatus& status)
-{
-    Lock lock(sRegistryMutex);
-
-    if (gNodes) {
-        for (size_t n = 0, N = gNodes->size(); n < N; ++n) {
-
-            const NodeInfo& node = (*gNodes)[n];
-
-            status = plugin.deregisterData(node.typeId);
-
-            if (!status) {
-                const std::string msg = "Failed to deregister '" +
-                    std::string(node.typeName.asChar()) + "'";
-                status.perror(msg.c_str());
-                break;
-            }
-        }
-    }
-}
-
-} // namespace openvdb_maya
-
-
-////////////////////////////////////////
-
 
 MStatus
 initializePlugin(MObject obj)
@@ -170,13 +63,30 @@ initializePlugin(MObject obj)
     MStatus status;
     MFnPlugin plugin(obj, "DreamWorks Animation", "0.5", "Any");
 
+#ifdef _WIN32
+    GLenum err = glewInit();
+    if (GLEW_OK != err) {
+        std::stringstream ss;
+        ss << "Failed to initialize glew: " << glewGetErrorString(err) << std::endl;
+        status.perror(ss.str().c_str());
+        return status;
+    }
+#endif
+
     status = plugin.registerData("OpenVDBData", OpenVDBData::id, OpenVDBData::creator);
     if (!status) {
         status.perror("Failed to register 'OpenVDBData'");
         return status;
     }
 
-    openvdb_maya::NodeRegistry::registerNodes(plugin, status);
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBCopyNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFilterNode>(plugin));    
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFromMayaFluidNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFromPolygonsNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBReadNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBTransformNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBVisualizeNode>(plugin, MPxNode::kLocatorNode));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBWriteNode>(plugin));
 
     return status;
 }
@@ -194,7 +104,14 @@ uninitializePlugin(MObject obj)
         return status;
     }
 
-    openvdb_maya::NodeRegistry::deregisterNodes(plugin, status);
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBCopyNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFilterNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFromMayaFluidNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFromPolygonsNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBReadNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBTransformNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBVisualizeNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBWriteNode>(plugin));
 
     return status;
 }

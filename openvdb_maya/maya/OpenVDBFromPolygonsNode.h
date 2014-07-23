@@ -30,60 +30,42 @@
 
 /// @author FX R&D OpenVDB team
 
-#ifndef OPENVDB_MAYA_PLUGIN_HAS_BEEN_INCLUDED
-#define OPENVDB_MAYA_PLUGIN_HAS_BEEN_INCLUDED
-
-#ifdef _WIN32
-#include <GL/glew.h>
-#endif
+#ifndef OPENVDB_MAYA_FROM_POLYGONS_NODE_HAS_BEEN_INCLUDED
+#define OPENVDB_MAYA_FROM_POLYGONS_NODE_HAS_BEEN_INCLUDED
 
 #include <maya/MPxNode.h>
 
-////////////////////////////////////////
-
-class MFnPlugin;
-class MString;
-
-namespace openvdb_maya {
-
-template <typename NodeType>
-MStatus     registerNode(MFnPlugin& plugin, 
-                         MPxNode::Type type = MPxNode::kDependNode,
-                         const MString* classification = NULL)
+class OpenVDBFromPolygonsNode : public MPxNode
 {
-    MStatus status = plugin.registerNode(NodeType::name, NodeType::id,
-        NodeType::creator, NodeType::initialize, type, classification);
+public:
+    static void*    creator();
+    static MStatus  initialize();
 
-    if (!status) {
-        const std::string msg = "Failed to register '" +
-            std::string(NodeType::name.asChar()) + "'";
-        status.perror(msg.c_str());        
-    }
+    static const MTypeId id;
+    static const MString name;
 
-    return status;
-}
+    static MObject aMeshInput;
+    static MObject aVdbOutput;
+    static MObject aExportDistanceGrid;
+    static MObject aDistanceGridName;
+    static MObject aExportDensityGrid;
+    static MObject aDensityGridName;
+    static MObject aVoxelSize;
+    static MObject aExteriorBandWidth;
+    static MObject aInteriorBandWidth;
+    static MObject aFillInterior;
+    static MObject aUnsignedDistanceField;
+    static MObject aEstimatedGridResolution;
+    static MObject aNodeInfo;
 
-template <typename NodeType>
-MStatus     deregisterNode(MFnPlugin& plugin)
-{
-    MStatus status = plugin.deregisterNode(NodeType::id);
+public:
+    OpenVDBFromPolygonsNode() {}
+    virtual ~OpenVDBFromPolygonsNode() {}
 
-    if (!status) {
-        const std::string msg = "Failed to deregister '" +
-            std::string(NodeType::name.asChar()) + "'";
-        status.perror(msg.c_str());
-    }
+    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
+};
 
-    return status;
-}
-
-} // namespace openvdb_maya
-
-
-////////////////////////////////////////
-
-
-#endif // OPENVDB_MAYA_NODE_REGISTRY_HAS_BEEN_INCLUDED
+#endif  // OPENVDB_MAYA_FROM_POLYGONS_NODE_HAS_BEEN_INCLUDED
 
 // Copyright (c) 2012-2013 DreamWorks Animation LLC
 // All rights reserved. This software is distributed under the

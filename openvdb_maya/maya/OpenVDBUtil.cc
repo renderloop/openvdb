@@ -30,11 +30,15 @@
 
 /// @author FX R&D OpenVDB team
 
+#ifdef _WIN32
+#include <GL/glew.h>
+#endif
 
+#undef isnan
 #include "OpenVDBUtil.h"
 
 #include <maya/MGlobal.h>
-
+#undef isnan
 
 namespace openvdb_maya {
 

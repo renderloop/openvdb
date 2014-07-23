@@ -31,6 +31,7 @@
 /// @author FX R&D OpenVDB team
 
 #include "OpenVDBPlugin.h"
+#include <openvdb_maya/OpenVDBFromPolygonsNode.h>
 #include <openvdb_maya/OpenVDBData.h>
 #include <openvdb_maya/OpenVDBUtil.h>
 
@@ -56,34 +57,9 @@ namespace mvdb = openvdb_maya;
 ////////////////////////////////////////
 
 
-struct OpenVDBFromPolygonsNode : public MPxNode
-{
-    OpenVDBFromPolygonsNode() {}
-    virtual ~OpenVDBFromPolygonsNode() {}
+const MTypeId OpenVDBFromPolygonsNode::id(0x00108A54);
+const MString OpenVDBFromPolygonsNode::name("OpenVDBFromPolygons");
 
-    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
-
-    static void* creator();
-    static MStatus initialize();
-
-    static MTypeId id;
-    static MObject aMeshInput;
-    static MObject aVdbOutput;
-    static MObject aExportDistanceGrid;
-    static MObject aDistanceGridName;
-    static MObject aExportDensityGrid;
-    static MObject aDensityGridName;
-    static MObject aVoxelSize;
-    static MObject aExteriorBandWidth;
-    static MObject aInteriorBandWidth;
-    static MObject aFillInterior;
-    static MObject aUnsignedDistanceField;
-    static MObject aEstimatedGridResolution;
-    static MObject aNodeInfo;
-};
-
-
-MTypeId OpenVDBFromPolygonsNode::id(0x00108A54);
 MObject OpenVDBFromPolygonsNode::aMeshInput;
 MObject OpenVDBFromPolygonsNode::aVdbOutput;
 MObject OpenVDBFromPolygonsNode::aExportDistanceGrid;
@@ -97,12 +73,6 @@ MObject OpenVDBFromPolygonsNode::aFillInterior;
 MObject OpenVDBFromPolygonsNode::aUnsignedDistanceField;
 MObject OpenVDBFromPolygonsNode::aEstimatedGridResolution;
 MObject OpenVDBFromPolygonsNode::aNodeInfo;
-
-
-namespace {
-    mvdb::NodeRegistry registerNode("OpenVDBFromPolygons", OpenVDBFromPolygonsNode::id,
-        OpenVDBFromPolygonsNode::creator, OpenVDBFromPolygonsNode::initialize);
-}
 
 
 ////////////////////////////////////////

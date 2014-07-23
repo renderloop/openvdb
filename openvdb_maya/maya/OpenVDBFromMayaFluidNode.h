@@ -30,60 +30,49 @@
 
 /// @author FX R&D OpenVDB team
 
-#ifndef OPENVDB_MAYA_PLUGIN_HAS_BEEN_INCLUDED
-#define OPENVDB_MAYA_PLUGIN_HAS_BEEN_INCLUDED
-
-#ifdef _WIN32
-#include <GL/glew.h>
-#endif
+#ifndef OPENVDB_MAYA_FROM_MAYA_FLUID_NODE_HAS_BEEN_INCLUDED
+#define OPENVDB_MAYA_FROM_MAYA_FLUID_NODE_HAS_BEEN_INCLUDED
 
 #include <maya/MPxNode.h>
 
-////////////////////////////////////////
-
-class MFnPlugin;
-class MString;
-
-namespace openvdb_maya {
-
-template <typename NodeType>
-MStatus     registerNode(MFnPlugin& plugin, 
-                         MPxNode::Type type = MPxNode::kDependNode,
-                         const MString* classification = NULL)
+class OpenVDBFromMayaFluidNode : public MPxNode
 {
-    MStatus status = plugin.registerNode(NodeType::name, NodeType::id,
-        NodeType::creator, NodeType::initialize, type, classification);
+public:
+    static void*    creator();
+    static MStatus  initialize();
 
-    if (!status) {
-        const std::string msg = "Failed to register '" +
-            std::string(NodeType::name.asChar()) + "'";
-        status.perror(msg.c_str());        
-    }
+    static const MTypeId id;
+    static const MString name;
 
-    return status;
-}
+    static MObject aFluidNodeName;
+    static MObject aVdbOutput;
 
-template <typename NodeType>
-MStatus     deregisterNode(MFnPlugin& plugin)
-{
-    MStatus status = plugin.deregisterNode(NodeType::id);
+    static MObject aDensity;
+    static MObject aDensityName;
+    static MObject aTemperature;
+    static MObject aTemperatureName;
+    static MObject aPressure;
+    static MObject aPressureName;
+    static MObject aFuel;
+    static MObject aFuelName;
+    static MObject aFalloff;
+    static MObject aFalloffName;
+    static MObject aVelocity;
+    static MObject aVelocityName;
+    static MObject aColors;
+    static MObject aColorsName;
+    static MObject aCoordinates;
+    static MObject aCoordinatesName;
+    static MObject aTime;
 
-    if (!status) {
-        const std::string msg = "Failed to deregister '" +
-            std::string(NodeType::name.asChar()) + "'";
-        status.perror(msg.c_str());
-    }
+public:
+    OpenVDBFromMayaFluidNode() {}
+    virtual ~OpenVDBFromMayaFluidNode() {}
 
-    return status;
-}
+    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
+};
 
-} // namespace openvdb_maya
-
-
-////////////////////////////////////////
-
-
-#endif // OPENVDB_MAYA_NODE_REGISTRY_HAS_BEEN_INCLUDED
+#endif  // OPENVDB_MAYA_FROM_MAYA_FLUID_NODE_HAS_BEEN_INCLUDED
 
 // Copyright (c) 2012-2013 DreamWorks Animation LLC
 // All rights reserved. This software is distributed under the

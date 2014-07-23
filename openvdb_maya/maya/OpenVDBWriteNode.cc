@@ -31,6 +31,7 @@
 /// @author FX R&D OpenVDB team
 
 #include "OpenVDBPlugin.h"
+#include <openvdb_maya/OpenVDBWriteNode.h>
 #include <openvdb_maya/OpenVDBData.h>
 #include <openvdb/io/Stream.h>
 
@@ -46,32 +47,12 @@ namespace mvdb = openvdb_maya;
 ////////////////////////////////////////
 
 
-struct OpenVDBWriteNode : public MPxNode
-{
-    OpenVDBWriteNode() {}
-    virtual ~OpenVDBWriteNode() {}
+const MTypeId OpenVDBWriteNode::id(0x00108A52);
+const MString OpenVDBWriteNode::name("OpenVDBWrite");
 
-    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
-
-    static void* creator();
-    static MStatus initialize();
-    static MObject aVdbFilePath;
-    static MObject aVdbInput;
-    static MObject aVdbOutput;
-    static MTypeId id;
-};
-
-
-MTypeId OpenVDBWriteNode::id(0x00108A52);
 MObject OpenVDBWriteNode::aVdbFilePath;
 MObject OpenVDBWriteNode::aVdbOutput;
 MObject OpenVDBWriteNode::aVdbInput;
-
-
-namespace {
-    mvdb::NodeRegistry registerNode("OpenVDBWrite", OpenVDBWriteNode::id,
-        OpenVDBWriteNode::creator, OpenVDBWriteNode::initialize);
-}
 
 
 ////////////////////////////////////////

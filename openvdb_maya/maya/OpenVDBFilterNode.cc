@@ -31,6 +31,7 @@
 /// @author FX R&D OpenVDB team
 
 #include "OpenVDBPlugin.h"
+#include <openvdb_maya/OpenVDBFilterNode.h>
 #include <openvdb_maya/OpenVDBData.h>
 #include <openvdb_maya/OpenVDBUtil.h>
 
@@ -42,36 +43,16 @@
 #include <maya/MGlobal.h>
 #include <maya/MFnEnumAttribute.h>
 #include <maya/MFnNumericAttribute.h>
-
+#include <maya/MDataBlock.h.>
 
 namespace mvdb = openvdb_maya;
-
 
 ////////////////////////////////////////
 
 
-struct OpenVDBFilterNode : public MPxNode
-{
-    OpenVDBFilterNode() {}
-    virtual ~OpenVDBFilterNode() {}
+const MTypeId OpenVDBFilterNode::id(0x00108A56);
+const MString OpenVDBFilterNode::name("OpenVDBFilter");
 
-    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
-
-    static void* creator();
-    static MStatus initialize();
-
-    static MTypeId id;
-    static MObject aVdbInput;
-    static MObject aVdbOutput;
-    static MObject aVdbSelectedGridNames;
-    static MObject aFilter;
-    static MObject aRadius;
-    static MObject aOffset;
-    static MObject aIterations;
-};
-
-
-MTypeId OpenVDBFilterNode::id(0x00108A56);
 MObject OpenVDBFilterNode::aVdbOutput;
 MObject OpenVDBFilterNode::aVdbInput;
 MObject OpenVDBFilterNode::aVdbSelectedGridNames;
@@ -79,12 +60,6 @@ MObject OpenVDBFilterNode::aFilter;
 MObject OpenVDBFilterNode::aRadius;
 MObject OpenVDBFilterNode::aOffset;
 MObject OpenVDBFilterNode::aIterations;
-
-
-namespace {
-    mvdb::NodeRegistry registerNode("OpenVDBFilter", OpenVDBFilterNode::id,
-        OpenVDBFilterNode::creator, OpenVDBFilterNode::initialize);
-}
 
 
 ////////////////////////////////////////

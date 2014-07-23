@@ -31,6 +31,7 @@
 /// @author FX R&D OpenVDB team
 
 #include "OpenVDBPlugin.h"
+#include <openvdb_maya/OpenVDBTransformNode.h>
 #include <openvdb_maya/OpenVDBData.h>
 #include <openvdb_maya/OpenVDBUtil.h>
 
@@ -50,30 +51,9 @@ namespace mvdb = openvdb_maya;
 ////////////////////////////////////////
 
 
-struct OpenVDBTransformNode : public MPxNode
-{
-    OpenVDBTransformNode() {}
-    virtual ~OpenVDBTransformNode() {}
+const MTypeId OpenVDBTransformNode::id(0x00108A57);
+const MString OpenVDBTransformNode::name("OpenVDBTransform");
 
-    virtual MStatus compute(const MPlug& plug, MDataBlock& data);
-
-    static void* creator();
-    static MStatus initialize();
-
-    static MTypeId id;
-    static MObject aVdbInput;
-    static MObject aVdbOutput;
-    static MObject aVdbSelectedGridNames;
-    static MObject aTranslate;
-    static MObject aRotate;
-    static MObject aScale;
-    static MObject aPivot;
-    static MObject aUniformScale;
-    static MObject aInvert;
-};
-
-
-MTypeId OpenVDBTransformNode::id(0x00108A57);
 MObject OpenVDBTransformNode::aVdbOutput;
 MObject OpenVDBTransformNode::aVdbInput;
 MObject OpenVDBTransformNode::aVdbSelectedGridNames;
@@ -83,12 +63,6 @@ MObject OpenVDBTransformNode::aScale;
 MObject OpenVDBTransformNode::aPivot;
 MObject OpenVDBTransformNode::aUniformScale;
 MObject OpenVDBTransformNode::aInvert;
-
-
-namespace {
-    mvdb::NodeRegistry registerNode("OpenVDBTransform", OpenVDBTransformNode::id,
-        OpenVDBTransformNode::creator, OpenVDBTransformNode::initialize);
-}
 
 
 ////////////////////////////////////////
