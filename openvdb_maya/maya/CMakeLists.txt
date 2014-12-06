@@ -11,6 +11,8 @@ include_directories(
     ${OPENVDB_MAYA_SOURCE_DIR}
     ${MAYA_INCLUDE_DIRS})
 
+link_directories(${Boost_LIBRARY_DIRS})
+
 if(WIN32)
     find_package(glew REQUIRED)
     include_directories(${GLEW_INCLUDE_DIRS})

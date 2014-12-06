@@ -4,6 +4,7 @@ set(SOURCE_FILES ${H_FILES} ${CXX_FILES})
 
 find_package(glfw REQUIRED)
 include_directories(${OPENVDB_INCLUDE_DIRS} ${GLFW_INCLUDE_DIRS})
+link_directories(${Boost_LIBRARY_DIRS})
 set(LINK_LIBS ${GLFW_LIBRARIES})
 
 if(WIN32)

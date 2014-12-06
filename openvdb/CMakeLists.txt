@@ -7,8 +7,10 @@ set(H_FILES
     io/Compression.h
     io/File.h
     io/GridDescriptor.h
+    io/io.h
     io/Queue.h
     io/Stream.h
+    io/TempFile.h
     math/BBox.h
     math/Coord.h
     math/DDA.h
@@ -39,9 +41,12 @@ set(H_FILES
     openvdb.h
     Platform.h
     PlatformConfig.h
+    tools/ChangeBackground.h
+    tools/Clip.h
     tools/Composite.h
     tools/Dense.h
     tools/DenseSparseTools.h
+    tools/Diagnostics.h
     tools/Filter.h
     tools/GridOperators.h
     tools/GridTransformer.h
@@ -59,9 +64,13 @@ set(H_FILES
     tools/Morphology.h
     tools/ParticlesToLevelSet.h
     tools/PointAdvect.h
+    tools/PointIndexGrid.h
+    tools/PointPartitioner.h
     tools/PointScatter.h
+    tools/Prune.h
     tools/RayIntersector.h
     tools/RayTracer.h
+    tools/SignedFloodFill.h
     tools/Statistics.h
     tools/ValueTransformer.h
     tools/VectorTransformer.h
@@ -72,11 +81,11 @@ set(H_FILES
     tree/LeafManager.h
     tree/LeafNode.h
     tree/LeafNodeBool.h
+    tree/NodeManager.h
     tree/NodeUnion.h
     tree/RootNode.h
     tree/Tree.h
     tree/TreeIterator.h
-    tree/Util.h
     tree/ValueAccessor.h
     Types.h
     util/CpuTimer.h
@@ -87,7 +96,7 @@ set(H_FILES
     util/NodeMasks.h
     util/NullInterrupter.h
     util/Util.h
-    version.h )
+    version.h)
 
 set(CXX_FILES
     Grid.cc
@@ -97,6 +106,7 @@ set(CXX_FILES
     io/GridDescriptor.cc
     io/Queue.cc
     io/Stream.cc
+    io/TempFile.cc
     math/Hermite.cc
     math/Maps.cc
     math/Proximity.cc
@@ -107,7 +117,7 @@ set(CXX_FILES
     openvdb.cc
     Platform.cc
     util/Formats.cc
-    util/Util.cc )
+    util/Util.cc)
 
 set(SOURCE_FILES ${H_FILES} ${CXX_FILES})
 

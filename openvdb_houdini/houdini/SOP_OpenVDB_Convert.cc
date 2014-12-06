@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2012-2013 DreamWorks Animation LLC
+// Copyright (c) 2012-2014 DreamWorks Animation LLC
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -41,6 +41,7 @@
 #include <openvdb/tools/LevelSetUtil.h>
 #include <openvdb/tools/MeshToVolume.h>
 #include <openvdb/tools/VolumeToMesh.h>
+#include <openvdb/tools/Prune.h>
 #include <openvdb/tree/ValueAccessor.h>
 
 #include <CH/CH_Manager.h>
@@ -51,6 +52,7 @@
 #include <UT/UT_Version.h>
 #include <UT/UT_VoxelArray.h>
 #include <SYS/SYS_Math.h>
+#include <PRM/PRM_Parm.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/math/special_functions/round.hpp>
@@ -70,16 +72,17 @@
 #define HAVE_SPLITTING 0
 #endif
 
+#if defined(__GNUC__) && !defined(__INTEL_COMPILER)
+// GA_RWHandleV3 fails to initialize its member variables in some cases.
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
+
 
 namespace hvdb = openvdb_houdini;
 namespace hutil = houdini_utils;
 
 namespace {
-#if HAVE_POLYSOUP
-enum ConvertTo { HVOLUME, OPENVDB, POLYGONS, POLYSOUP, /*SIMDATA*/ };
-#else
-enum ConvertTo { HVOLUME, OPENVDB, POLYGONS, /*SIMDATA*/ };
-#endif
+enum ConvertTo { HVOLUME, OPENVDB, POLYGONS /*, SIMDATA*/ };
 enum ConvertClass { CLASS_NO_CHANGE, CLASS_SDF, CLASS_FOG_VOLUME };
 }
 
@@ -88,7 +91,7 @@ class SOP_OpenVDB_Convert: public hvdb::SOP_NodeVDB
 {
 public:
     SOP_OpenVDB_Convert(OP_Network*, const char* name, OP_Operator*);
-    virtual ~SOP_OpenVDB_Convert() {};
+    virtual ~SOP_OpenVDB_Convert() {}
 
     static OP_Node* factory(OP_Network*, const char* name, OP_Operator*);
 
@@ -101,6 +104,7 @@ public:
 protected:
     virtual OP_ERROR cookMySop(OP_Context&);
     virtual bool updateParmsFlags();
+    virtual void resolveObsoleteParms(PRM_ParmList*);
 
 private:
     void convertToPoly(
@@ -165,21 +169,18 @@ newSopOperator(OP_OperatorTable* table)
 
     parms.add(hutil::ParmFactory(PRM_STRING, "group", "Group")
         .setHelpText("Specify a subset of the input VDB grids to surface.")
-        .setChoiceList(&hutil::PrimGroupMenu));
+        .setChoiceList(&hutil::PrimGroupMenuInput1));
 
 
     { // Convert To Menu
         const char* items[] = {
             "volume",   "Volume",
             "vdb",      "VDB",
-            "poly",     "Polygons",
-#if HAVE_POLYSOUP
-            "polysoup", "Polygon Soup",
-#endif
+            "poly",     "Polygon Surface",
             NULL
         };
 
-        parms.add(hutil::ParmFactory(PRM_ORD, "conversion", "Convert To")
+        parms.add(hutil::ParmFactory(PRM_ORD, "convertto", "Convert To")
             .setDefault(PRMzeroDefaults)
             .setChoiceListItems(PRM_CHOICELIST_SINGLE, items));
     }
@@ -191,10 +192,26 @@ newSopOperator(OP_OperatorTable* table)
             "fog",  "Convert SDF to Fog",
             NULL
         };
+//
 
         parms.add(hutil::ParmFactory(PRM_ORD, "vdbclass", "VDB Class")
             .setDefault(PRMzeroDefaults)
             .setChoiceListItems(PRM_CHOICELIST_SINGLE, class_items));
+    }
+
+    { // Geometry Type
+        const char* items[] = {
+            "polysoup", "Polygon Soup",
+            "poly",     "Polygons",
+            NULL
+        };
+
+        parms.add(hutil::ParmFactory(PRM_ORD, "geometrytype", "Geometry Type")
+            .setDefault(PRMzeroDefaults)
+            .setHelpText("Type of geometry to output. A polygon soup is a primitive "
+                "that stores polygons using a compact memory representation. Note "
+                "that not all geometry nodes can operate directly on this primitive.")
+            .setChoiceListItems(PRM_CHOICELIST_SINGLE, items));
     }
 
     //////////
@@ -216,13 +233,13 @@ newSopOperator(OP_OperatorTable* table)
     parms.add(hutil::ParmFactory(PRM_FLT_J, "isoValue", "Isovalue")
         .setRange(PRM_RANGE_UI, -1.0, PRM_RANGE_UI, 1.0)
         .setHelpText("The crossing point of the VDB values that is considered "
-            "the surface when converting to polygons."));
+            "the surface when converting to polygons"));
 
     parms.add(hutil::ParmFactory(PRM_FLT_J, "fogisovalue", "Fog Isovalue")
         .setRange(PRM_RANGE_UI, 0.0, PRM_RANGE_UI, 1.0)
         .setDefault(PRMpointFiveDefaults)
         .setHelpText("The crossing point of the VDB values that is considered "
-            "the surface when converting to level sets from fog volumes."));
+            "the surface when converting to level sets from fog volumes"));
 
     parms.add(hutil::ParmFactory(PRM_FLT_J, "adaptivity", "Adaptivity")
         .setRange(PRM_RANGE_RESTRICTED, 0.0, PRM_RANGE_RESTRICTED, 2.0)
@@ -232,17 +249,17 @@ newSopOperator(OP_OperatorTable* table)
             "polygons to express the surface."));
 
     parms.add(hutil::ParmFactory(PRM_TOGGLE, "computenormals", "Compute Vertex Normals")
-        .setHelpText("Computes edge preserving vertex normals."));
+        .setHelpText("Compute edge-preserving vertex normals"));
 
     parms.add(hutil::ParmFactory(PRM_INT_J, "automaticpartitions", "Automatic Partitions")
         .setRange(PRM_RANGE_RESTRICTED, 1, PRM_RANGE_UI, 20)
-        .setHelpText("Subdivide volume and mesh into disjoint parts.")
+        .setHelpText("Subdivide volume and mesh into disjoint parts")
         .setDefault(PRMoneDefaults)
         .setCallbackFunc(&checkActivePartCB));
 
     parms.add(hutil::ParmFactory(PRM_INT_J, "activepart", "Active Partition")
         .setRange(PRM_RANGE_RESTRICTED, 1, PRM_RANGE_UI, 20)
-        .setHelpText("Specific partition to mesh.")
+        .setHelpText("Specific partition to mesh")
         .setDefault(PRMzeroDefaults)
         .setCallbackFunc(&checkActivePartCB));
 
@@ -267,7 +284,7 @@ newSopOperator(OP_OperatorTable* table)
     parms.add(hutil::ParmFactory(PRM_FLT_J, "edgetolerance", "Edge Tolerance")
         .setDefault(0.5)
         .setRange(PRM_RANGE_RESTRICTED, 0.0, PRM_RANGE_RESTRICTED, 1.0)
-        .setHelpText("Controls the edge adaptivity mask."));
+        .setHelpText("Controls the edge adaptivity mask"));
 
     parms.add(hutil::ParmFactory(PRM_STRING, "surfacegroup", "Surface Group")
         .setDefault("surface_polygons")
@@ -304,31 +321,29 @@ newSopOperator(OP_OperatorTable* table)
    parms.add(hutil::ParmFactory(PRM_TOGGLE, "surfacemask", "")
         .setDefault(PRMoneDefaults)
         .setTypeExtended(PRM_TYPE_TOGGLE_JOIN)
-        .setHelpText("Enable / disable the surface mask."));
+        .setHelpText("Enable / disable the surface mask"));
 
     parms.add(hutil::ParmFactory(PRM_STRING, "surfacemaskname", "Surface Mask")
-        .setHelpText("A single level-set or sdf grid whose interior defines the region to mesh.")
-        .setSpareData(&SOP_Node::theThirdInput)
-        .setChoiceList(&hutil::PrimGroupMenu));
+        .setHelpText("A single level-set or sdf grid whose interior defines the region to mesh")
+        .setChoiceList(&hutil::PrimGroupMenuInput3));
 
     parms.add(hutil::ParmFactory(PRM_FLT_J, "surfacemaskoffset", "Mask Offset")
         .setDefault(PRMzeroDefaults)
-        .setHelpText("Isovalue used to offset the interior region of the surface mask.")
+        .setHelpText("Isovalue used to offset the interior region of the surface mask")
         .setRange(PRM_RANGE_UI, -1.0, PRM_RANGE_UI, 1.0));
 
     parms.add(hutil::ParmFactory(PRM_TOGGLE, "invertmask", "Invert Surface Mask")
-        .setHelpText("Used to mesh the complement of the mask."));
+        .setHelpText("Used to mesh the complement of the mask"));
 
 
     parms.add(hutil::ParmFactory(PRM_TOGGLE, "adaptivityfield", "")
         .setTypeExtended(PRM_TYPE_TOGGLE_JOIN)
-        .setHelpText("Enable / disable the the adaptivity field."));
+        .setHelpText("Enable / disable the the adaptivity field"));
 
     parms.add(hutil::ParmFactory(PRM_STRING, "adaptivityfieldname", "Adaptivity Field")
         .setHelpText(
-            "A single scalar grid used as a spatial multiplier for the adaptivity threshold.")
-        .setSpareData(&SOP_Node::theThirdInput)
-        .setChoiceList(&hutil::PrimGroupMenu));
+            "A single scalar grid used as a spatial multiplier for the adaptivity threshold")
+        .setChoiceList(&hutil::PrimGroupMenuInput3));
 
 
 
@@ -357,6 +372,23 @@ newSopOperator(OP_OperatorTable* table)
     hutil::ParmList obsoleteParms;
     obsoleteParms.add(hutil::ParmFactory(PRM_SEPARATOR,"sep1", ""));
     obsoleteParms.add(hutil::ParmFactory(PRM_TOGGLE, "smoothseams", "Smooth Seams"));
+
+    { // old conversion menu
+        const char* items[] = {
+            "volume",   "Volume",
+            "vdb",      "VDB",
+            "poly",     "Polygons",
+#if HAVE_POLYSOUP
+            "polysoup", "Polygon Soup",
+#endif
+            NULL
+        };
+
+        obsoleteParms.add(hutil::ParmFactory(PRM_ORD, "conversion", "Convert To")
+            .setDefault(PRMzeroDefaults)
+            .setChoiceListItems(PRM_CHOICELIST_SINGLE, items));
+    }
+
 
     // Register this operator.
     hvdb::OpenVDBOpFactory("OpenVDB Convert",
@@ -517,7 +549,7 @@ convertVDBClass(
 
                 tools::MeshToVolume<FloatGrid> vol(transform);
                 vol.convertToLevelSet(points, primitives,
-			LEVEL_SET_HALF_WIDTH, LEVEL_SET_HALF_WIDTH);
+                    LEVEL_SET_HALF_WIDTH, LEVEL_SET_HALF_WIDTH);
 
                 // Set grid and visualization
                 it->setGrid(*vol.distGridPtr());
@@ -546,9 +578,17 @@ void
 copyMesh(
     GU_Detail& detail,
     const GU_PrimVDB* srcvdb,
+#if (UT_VERSION_INT < 0x0c0500F5) // earlier than 12.5.245
+    GA_PrimitiveGroup* /*delgroup*/,
+#else
     GA_PrimitiveGroup* delgroup,
+#endif
     openvdb::tools::VolumeToMesh& mesher,
+#if (UT_VERSION_INT < 0x0c0500F5) // earlier than 12.5.245
+    bool /*toPolySoup*/,
+#else
     bool toPolySoup,
+#endif
     GA_PrimitiveGroup* surfaceGroup = NULL,
     GA_PrimitiveGroup* interiorGroup = NULL,
     GA_PrimitiveGroup* seamGroup = NULL,
@@ -561,17 +601,20 @@ copyMesh(
     const char seamLineFlag = char(openvdb::tools::POLYFLAG_FRACTURE_SEAM);
 
     // Disable adding to seamPointGroup if we don't have pointFlags()
-    if (mesher.pointFlags().size() != mesher.pointListSize())
-	seamPointGroup = NULL;
+    if (mesher.pointFlags().size() != mesher.pointListSize()) {
+        seamPointGroup = NULL;
+    }
 
 #if (UT_VERSION_INT < 0x0c0500F5) // earlier than 12.5.245
-    const GA_Offset lastIdx(detail.getPointMap().lastOffset()+1);
 
+    bool groupSeamPoints = seamPointGroup && !mesher.pointFlags().empty();
+
+    const GA_Offset lastIdx(detail.getNumPoints());
     for (size_t n = 0, N = mesher.pointListSize(); n < N; ++n) {
         GA_Offset ptoff = detail.appendPointOffset();
         detail.setPos3(ptoff, points[n].x(), points[n].y(), points[n].z());
 
-        if (seamPointGroup && mesher.pointFlags()[n]) {
+        if (groupSeamPoints && mesher.pointFlags()[n]) {
             seamPointGroup->addOffset(ptoff);
         }
     }
@@ -638,7 +681,7 @@ copyMesh(
     pthandle.setBlock(startpt, npoints, (UT_Vector3 *)points.get());
 
     // group fracture seam points
-    if (seamPointGroup) {
+    if (seamPointGroup && GA_Size(mesher.pointFlags().size()) == npoints) {
         GA_Offset ptoff = startpt;
         for (GA_Size i = 0; i < npoints; ++i) {
 
@@ -781,20 +824,22 @@ SOP_OpenVDB_Convert::updateParmsFlags()
     bool changed = false;
     const fpreal time = CHgetEvalTime();
 
-    ConvertTo target = static_cast<ConvertTo>(evalInt("conversion", 0, time));
+    ConvertTo target = static_cast<ConvertTo>(evalInt("convertto", 0, time));
 #if HAVE_SPLITTING
     bool toVolume = (target == HVOLUME);
 #endif
     bool toOpenVDB = (target == OPENVDB);
-    bool toPoly = (target == POLYGONS);
-    bool toPolySoup = false;
-#if HAVE_POLYSOUP
-    toPolySoup = (target == POLYSOUP);
-    toPoly |= toPolySoup;
-#endif
-
     bool toSDF = (evalInt("vdbclass", 0, time) == CLASS_SDF);
 
+    bool toPoly = (target == POLYGONS);
+    bool toPolySoup = evalInt("geometrytype", 0, time) == 0;
+
+#if !HAVE_POLYSOUP
+    changed |= setVisibleState("geometrytype", false);
+    toPolySoup = false;
+#endif
+
+    changed |= enableParm("geometrytype", toPoly);
     changed |= enableParm("adaptivity", toPoly);
     changed |= enableParm("isoValue", toPoly || (toOpenVDB && toSDF));
     changed |= enableParm("fogisovalue", toOpenVDB && toSDF);
@@ -870,6 +915,28 @@ SOP_OpenVDB_Convert::updateParmsFlags()
     return changed;
 }
 
+void
+SOP_OpenVDB_Convert::resolveObsoleteParms(PRM_ParmList* obsoleteParms)
+{
+    if (!obsoleteParms) return;
+
+    PRM_Parm* parm = obsoleteParms->getParmPtr("conversion");
+    if (parm && !parm->isFactoryDefault()) {
+
+        const int conversion = obsoleteParms->evalInt("conversion", 0, 0);
+        if (conversion == 1) {
+            setInt("convertto", 0, 0, 1);
+        } else if (conversion == 2) {
+            setInt("convertto", 0, 0, 2);
+            setInt("geometrytype", 0, 0, 1);
+        } else if (conversion == 3) {
+            setInt("convertto", 0, 0, 2);
+            setInt("geometrytype", 0, 0, 0);
+        }
+    }
+    hvdb::SOP_NodeVDB::resolveObsoleteParms(obsoleteParms);
+}
+
 
 ////////////////////////////////////////
 
@@ -942,7 +1009,8 @@ SOP_OpenVDB_Convert::referenceMeshing(
         if (gridClass == openvdb::GRID_LEVEL_SET) {
             converter.convertToLevelSet(pointList, primList);
         } else {
-            const ValueType bandWidth = backgroundValue / transform->voxelSize()[0];
+            const ValueType bandWidth = static_cast<ValueType>(
+                backgroundValue / transform->voxelSize()[0]);
             converter.convertToLevelSet(pointList, primList, bandWidth, bandWidth);
         }
 
@@ -958,7 +1026,7 @@ SOP_OpenVDB_Convert::referenceMeshing(
 
     if (sharpenFeatures) {
 
-        const double edgetolerance = double(evalFloat("edgetolerance", 0, time));
+        const float edgetolerance = static_cast<float>(evalFloat("edgetolerance", 0, time));
 
         maskTree = typename BoolTreeType::Ptr(new BoolTreeType(false));
         maskTree->topologyUnion(indexGrid->tree());
@@ -968,7 +1036,7 @@ SOP_OpenVDB_Convert::referenceMeshing(
             op(*refGeo, indexGrid->tree(), maskLeafs, edgetolerance);
         op.run();
 
-        maskTree->pruneInactive();
+        openvdb::tools::pruneInactive(*maskTree);
 
         openvdb::tools::dilateVoxels(*maskTree, 2);
 
@@ -1046,14 +1114,14 @@ SOP_OpenVDB_Convert::referenceMeshing(
 
     grids.clear();
 
+    bool toPolySoup = false;
+
+#if HAVE_POLYSOUP
+    toPolySoup = evalInt("geometrytype", 0, time) == 0;
+#endif
+
     for (size_t i = 0, I = fragments.size(); i < I; ++i) {
         mesher(*fragments[i]);
-#if HAVE_POLYSOUP
-        ConvertTo target = static_cast<ConvertTo>(evalInt("conversion", 0, time));
-        bool toPolySoup = (target == POLYSOUP);
-#else
-        bool toPolySoup = false;
-#endif
         copyMesh(*gdp, fragment_vdbs[i], delgroup, mesher, toPolySoup,
             surfaceGroup, interiorGroup, seamGroup, seamPointGroup);
     }
@@ -1069,7 +1137,7 @@ SOP_OpenVDB_Convert::referenceMeshing(
     if (!boss.wasInterrupted() && computeNormals) {
 
         UTparallelFor(GA_SplittableRange(gdp->getPrimitiveRange()),
-            hvdb::VertexNormalOp(*gdp, interiorGroup, (transferAttributes ? -1.0 : 0.7) ));
+            hvdb::VertexNormalOp(*gdp, interiorGroup, (transferAttributes ? -1.0f : 0.7f) ));
 
         if (!interiorGroup) {
             addWarning(SOP_MESSAGE, "More accurate vertex normals can be generated "
@@ -1155,7 +1223,8 @@ SOP_OpenVDB_Convert::convertToPoly(
                             openvdb::gridConstPtrCast<openvdb::FloatGrid>(maskIt->getGridPtr());
 
                         mesher.setSurfaceMask(
-                            openvdb::tools::sdfInteriorMask(*grid, maskoffset), invertmask);
+                            openvdb::tools::sdfInteriorMask(*grid, static_cast<float>(maskoffset)),
+                            invertmask);
                     } else {
                         addWarning(SOP_MESSAGE, "Currently only supporting level set masks.");
                     }
@@ -1251,11 +1320,10 @@ SOP_OpenVDB_Convert::convertToPoly(
 
     } else {
 
+     bool toPolySoup = false;
+
 #if HAVE_POLYSOUP
-        ConvertTo target = static_cast<ConvertTo>(evalInt("conversion", 0, time));
-        bool toPolySoup = (target == POLYSOUP);
-#else
-        bool toPolySoup = false;
+    toPolySoup = evalInt("geometrytype", 0, time) == 0;
 #endif
 
         // Mesh each VDB primitive independently
@@ -1303,13 +1371,13 @@ SOP_OpenVDB_Convert::cookMySop(OP_Context& context)
 
         hvdb::Interrupter interrupter("Convert");
 
-        switch (evalInt("conversion",  0, t))
+        switch (evalInt("convertto",  0, t))
         {
             case HVOLUME: {
 #if HAVE_SPLITTING
-		const bool splitDisjointVols = (evalInt("splitdisjointvolumes", 0, t) != 0);
+                const bool splitDisjointVols = (evalInt("splitdisjointvolumes", 0, t) != 0);
 #else
-		const bool splitDisjointVols = false;
+                const bool splitDisjointVols = false;
 #endif
                 convertToVolumes(*gdp, group, splitDisjointVols);
                 break;
@@ -1323,11 +1391,10 @@ SOP_OpenVDB_Convert::cookMySop(OP_Context& context)
                 switch (evalInt("vdbclass", 0, t)) {
                     case CLASS_SDF:
                         convertVDBClass(*gdp, group, openvdb::GRID_LEVEL_SET,
-                            evalFloat("fogisovalue", 0, t));
+                            static_cast<float>(evalFloat("fogisovalue", 0, t)));
                         break;
                     case CLASS_FOG_VOLUME:
-                        convertVDBClass(*gdp, group, openvdb::GRID_FOG_VOLUME,
-			    /*unused*/0);
+                        convertVDBClass(*gdp, group, openvdb::GRID_FOG_VOLUME, /*unused*/0);
                         break;
                     default:
                         // ignore
@@ -1336,16 +1403,13 @@ SOP_OpenVDB_Convert::cookMySop(OP_Context& context)
                 break;
             }
             case POLYGONS: {
-                convertToPoly(t, group, false, interrupter);
-                break;
-            }
-
+                bool usePolygonSoup = false;
 #if HAVE_POLYSOUP
-            case POLYSOUP: {
-                convertToPoly(t, group, true, interrupter);
+                usePolygonSoup = evalInt("geometrytype", 0, t) == 0;
+#endif
+                convertToPoly(t, group, usePolygonSoup, interrupter);
                 break;
             }
-#endif
 
             default: {
                 addWarning(SOP_MESSAGE, "Unrecognized conversion type");
@@ -1365,6 +1429,6 @@ SOP_OpenVDB_Convert::cookMySop(OP_Context& context)
     return error();
 }
 
-// Copyright (c) 2012-2013 DreamWorks Animation LLC
+// Copyright (c) 2012-2014 DreamWorks Animation LLC
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

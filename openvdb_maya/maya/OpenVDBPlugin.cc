@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2012-2013 DreamWorks Animation LLC
+// Copyright (c) 2012-2014 DreamWorks Animation LLC
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -38,6 +38,7 @@
 #include <openvdb_maya/OpenVDBFromMayaFluidNode.h>
 #include <openvdb_maya/OpenVDBFromPolygonsNode.h>
 #include <openvdb_maya/OpenVDBReadNode.h>
+#include <openvdb_maya/OpenVDBToPolygonsNode.h>
 #include <openvdb_maya/OpenVDBTransformNode.h>
 #include <openvdb_maya/OpenVDBVisualizeNode.h>
 #include <openvdb_maya/OpenVDBWriteNode.h>
@@ -83,6 +84,7 @@ initializePlugin(MObject obj)
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFilterNode>(plugin));    
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFromMayaFluidNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBFromPolygonsNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBToPolygonsNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBReadNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBTransformNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::registerNode<OpenVDBVisualizeNode>(plugin, MPxNode::kLocatorNode));
@@ -108,6 +110,7 @@ uninitializePlugin(MObject obj)
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFilterNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFromMayaFluidNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBFromPolygonsNode>(plugin));
+    CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBToPolygonsNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBReadNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBTransformNode>(plugin));
     CHECK_MSTATUS_AND_RETURN_IT(mvdb::deregisterNode<OpenVDBVisualizeNode>(plugin));
@@ -120,6 +123,6 @@ uninitializePlugin(MObject obj)
 ////////////////////////////////////////
 
 
-// Copyright (c) 2012-2013 DreamWorks Animation LLC
+// Copyright (c) 2012-2014 DreamWorks Animation LLC
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
